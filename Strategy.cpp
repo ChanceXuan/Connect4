@@ -1,9 +1,33 @@
 #include <iostream>
+#include <ctime>
 #include "Point.h"
 #include "Strategy.h"
-#include "MonteCarlo.h"
+#include "UCT.h"
 
 using namespace std;
+
+const double timeLimit = 2.5; //时间限制为2.5s
+
+int startTime;
+int chessNumber = 100; //初始化棋子数量为100用于检测开局
+
+//统计棋盘上棋子数目
+int countChess(int **_board,int row,int column)
+{
+	int count = 0;
+	for(int i = 0;i < row;i++)
+		for(int j = 0;j < column;j++)
+			if(_board[i][j] > 0)
+				count++;
+	return count;
+}
+
+State* state;
+
+Node* root;
+Node* simulationNode;
+
+int profit = 0;
 
 /*
 	策略函数接口,该函数被对抗平台调用,每次传入当前状态,要求输出你的落子点,该落子点必须是一个符合游戏规则的落子点,不然对抗平台会直接认为你的程序有误
@@ -39,13 +63,28 @@ extern "C" __declspec(dllexport) Point* getPoint(const int M, const int N, const
 			board[i][j] = _board[i * N + j];
 		}
 	}
-	
 	/*
 		根据你自己的策略来返回落子点,也就是根据你的策略完成对x,y的赋值
 		该部分对参数使用没有限制，为了方便实现，你可以定义自己新的类、.h文件、.cpp文件
 	*/
 	//Add your own code below
-	
+	startTime = clock();//计时开始
+	int presentChessNumber = countChess(board,M,N);
+	if(presentChessNumber < chessNumber) //如果游戏刚开始或有悔棋那么棋子个数必然减少，就重新开始
+	{
+		chessNumber = presentChessNumber;
+		initBoard();//新建一个棋盘，new board指针
+		clearTree(root, simulationNode, state);
+	}
+	while (clock() - startTime < timeLimit) //尚未耗尽计算时长 
+	{
+		Node* root = new Node(); //以当前状态创建根节点 
+		Node* selectedNode = TreePolicy(root, state); //运用搜索树策略节点 
+		board = state->boardState;
+		profit = DefaultPolicy(state, simulationNode);
+		Backup(simulationNode, profit);
+		chessNumber++;
+	}
 	/*
      //a naive example
 	for (int i = N-1; i >= 0; i--) {
@@ -83,7 +122,6 @@ void clearArray(int M, int N, int** board){
 	}
 	delete[] board;
 }
-
 
 /*
 	添加你自己的辅助函数，你可以声明自己的类、函数，添加新的.h .cpp文件来辅助实现你的想法
