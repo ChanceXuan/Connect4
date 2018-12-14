@@ -1,5 +1,8 @@
 #include "Judge.h"
 
+#include <conio.h>
+#include <atlstr.h>
+
 bool userWin(const int x, const int y, const int M, const int N, int* const* board){
 	//∫·œÚºÏ≤‚
     int i, j;
@@ -102,8 +105,11 @@ bool isTie(const int N, const int* top){
 	bool tie = true;
     for (int i = 0; i < N; i++)
     {
+		//_cprintf("let's look at column%d\n", i);
+		//_cprintf("top[%d]=%d\n", i, top[i]);
         if (top[i] > 0)
         {
+			//_cprintf("column%d is OK!\n", i);
             tie = false;
             break;
         }

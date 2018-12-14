@@ -4,30 +4,14 @@
 #include "Strategy.h"
 #include "UCT.h"
 
-using namespace std;
-
-const double timeLimit = 2.5; //时间限制为2.5s
-
-int startTime;
-int chessNumber = 100; //初始化棋子数量为100用于检测开局
-
-//统计棋盘上棋子数目
-int countChess(int **_board,int row,int column)
-{
-	int count = 0;
-	for(int i = 0;i < row;i++)
-		for(int j = 0;j < column;j++)
-			if(_board[i][j] > 0)
-				count++;
-	return count;
-}
-
-State* state;
+#include <conio.h>
+#include <atlstr.h>
 
 Node* root;
-Node* simulationNode;
+bool rootCreated = false;
 
-int profit = 0;
+using namespace std;
+const double timeLimit = 2.5; //时间限制为3s
 
 /*
 	策略函数接口,该函数被对抗平台调用,每次传入当前状态,要求输出你的落子点,该落子点必须是一个符合游戏规则的落子点,不然对抗平台会直接认为你的程序有误
@@ -51,40 +35,75 @@ int profit = 0;
 		你的落子点Point
 */
 extern "C" __declspec(dllexport) Point* getPoint(const int M, const int N, const int* top, const int* _board, 
-	const int lastX, const int lastY, const int noX, const int noY){
+	const int lastX, const int lastY, const int noX, const int noY)
+{
+	AllocConsole();
+	_cprintf("=====call Strategy=====\n");
 	/*
 		不要更改这段代码
 	*/
 	int x = -1, y = -1;//最终将你的落子点存到x,y中
 	int** board = new int*[M];
-	for(int i = 0; i < M; i++){
+	for(int i = 0; i < M; i++)
+	{
 		board[i] = new int[N];
-		for(int j = 0; j < N; j++){
+		for(int j = 0; j < N; j++)
 			board[i][j] = _board[i * N + j];
-		}
 	}
+
+	int* topVariable = new int[N];
+	for(int i = 0;i < N;i++)
+		topVariable[i] = top[i];
+
 	/*
 		根据你自己的策略来返回落子点,也就是根据你的策略完成对x,y的赋值
 		该部分对参数使用没有限制，为了方便实现，你可以定义自己新的类、.h文件、.cpp文件
 	*/
-	//Add your own code below
-	startTime = clock();//计时开始
-	int presentChessNumber = countChess(board,M,N);
-	if(presentChessNumber < chessNumber) //如果游戏刚开始或有悔棋那么棋子个数必然减少，就重新开始
+
+	int startTime = clock();//计时开始
+	int chessNumber;
+
+	initConst(topVariable, M, N, noX, noY); //将常数变量传给UCT算法
+
+	State* rootState = new State(board, topVariable, lastX, lastY, machineGo, M, N);
+
+	int presentChessNumber = countChess(board, M, N);
+
+	if (presentChessNumber <= 1)
+		chessNumber = 0;
+
+	if (!rootCreated)
+	{
+		_cprintf("root is not created\n");
+		root = new Node(M, N); //创建根节点
+		rootCreated = true;
+	}
+
+	if(presentChessNumber <= chessNumber) //如果游戏刚开始或有悔棋那么棋子个数必然减少，就重新开始
 	{
 		chessNumber = presentChessNumber;
-		initBoard();//新建一个棋盘，new board指针
-		clearTree(root, simulationNode, state);
+		rootState->boardState = initBoard(); //初始化清空棋盘
+		rootState->_whosTurn = machineGo;  //AI开始下棋
 	}
-	while (clock() - startTime < timeLimit) //尚未耗尽计算时长 
+
+	while ((clock() - startTime)/CLOCKS_PER_SEC < timeLimit) //尚未耗尽计算时长 
 	{
-		Node* root = new Node(); //以当前状态创建根节点 
-		Node* selectedNode = TreePolicy(root, state); //运用搜索树策略节点 
-		board = state->boardState;
-		profit = DefaultPolicy(state, simulationNode);
-		Backup(simulationNode, profit);
-		chessNumber++;
+		Node* expandedNode = TreePolicy(root, rootState); //用搜索树策略选择最佳节点
+		State* expandedState = new State(rootState->boardState, rootState->topState, rootState->_lastX, rootState->_lastY, userGo, M, N);
+		int profit = DefaultPolicy(expandedState); //用默认策略模拟随机落子
+		Node* tempNode = expandedNode;
+		while (tempNode)
+		{
+			tempNode->_visitedNum++; //访问次数+1 
+			tempNode->_profit += profit; //收益增加delta 
+			profit = -profit; //极大极小原理
+			tempNode = tempNode->parent;
+		}
 	}
+	root = bestChild(root, rootState, 0);
+	getMove(x, y);
+	root->clear();
+	chessNumber = countChess(board, M, N);
 	/*
      //a naive example
 	for (int i = N-1; i >= 0; i--) {
@@ -95,8 +114,7 @@ extern "C" __declspec(dllexport) Point* getPoint(const int M, const int N, const
 		}
 	}
     */
-	
-	
+	delete root;
 	/*
 		不要更改这段代码
 	*/
